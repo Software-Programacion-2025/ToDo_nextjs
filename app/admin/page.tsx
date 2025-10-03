@@ -145,7 +145,7 @@ export default function AdminPage() {
             </div>
 
             {/* Admin Actions */}
-            <div className="grid grid-cols-1 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -164,6 +164,29 @@ export default function AdminPage() {
                     >
                       <Users className="w-4 h-4 mr-2" />
                       Ir a Gestión de Usuarios
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="w-5 h-5" />
+                    Gestión de Tareas
+                  </CardTitle>
+                  <CardDescription>
+                    Crear nuevas tareas y asignarlas a usuarios del sistema
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex justify-center">
+                    <Button 
+                      className="w-full max-w-md"
+                      onClick={() => router.push('/admin/tasks')}
+                    >
+                      <Settings className="w-4 h-4 mr-2" />
+                      Ir a Gestión de Tareas
                     </Button>
                   </div>
                 </CardContent>

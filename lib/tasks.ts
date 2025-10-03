@@ -75,6 +75,23 @@ export const TaskService = {
     }
   },
 
+  // Obtener tareas asignadas a un usuario específico
+  getTasksByUser: async (userId: string): Promise<Task[]> => {
+    try {
+      const response = await AuthService.fetchWithAuth(`/tasks/user/${userId}`)
+      
+      if (!response.ok) {
+        throw new Error(`Error fetching user tasks: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      return Array.isArray(data) ? data.map(TaskService.mapTaskToLocal) : []
+    } catch (error) {
+      console.error('Error fetching user tasks:', error)
+      throw error
+    }
+  },
+
   // Obtener tarea por ID
   getTaskById: async (id: number): Promise<Task | null> => {
     try {
@@ -201,16 +218,32 @@ export const TaskService = {
   },
 
   updateTask: async (id: number, taskData: Partial<Task>): Promise<Task | null> => {
-    // Solo permite actualizar el estado por ahora
-    if (taskData.state || taskData.estado) {
-      const newState = taskData.state || 
-        (taskData.estado === "pendiente" ? "pending" : 
-         taskData.estado === "en-progreso" ? "in-progress" : 
-         taskData.estado === "completada" ? "completed" : "pending")
-      
-      return await TaskService.updateTaskState(id, newState)
+    try {
+      const updateData = {
+        title: taskData.title,
+        description: taskData.description,
+        state: taskData.state || 
+          (taskData.estado === "pendiente" ? "pending" : 
+           taskData.estado === "en-progreso" ? "in-progress" : 
+           taskData.estado === "completada" ? "completed" : undefined)
+      }
+
+      const response = await AuthService.fetchWithAuth(`/tasks/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updateData),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || `Error ${response.status}: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      return TaskService.mapTaskToLocal(data)
+    } catch (error) {
+      console.error('Error updating task:', error)
+      throw error
     }
-    return null
   },
 
   deleteTask: async (id: number): Promise<boolean> => {

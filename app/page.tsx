@@ -2,6 +2,7 @@
 
 import type React from "react"
 
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -11,8 +12,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { AlertCircle, CheckCircle2 } from "lucide-react"
 import { AuthService } from "@/lib/auth"
 
+
 export default function LoginPage() {
-  const [username, setUsername] = useState("")
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
@@ -23,17 +25,22 @@ export default function LoginPage() {
     setIsLoading(true)
     setError("")
 
-    // Simulación de autenticación
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    if (username === "admin" && password === "admin") {
-      AuthService.login(username)
+    try {
+      await AuthService.login({
+        emails: email,
+        password: password,
+      })
+      
       router.push("/dashboard")
-    } else {
-      setError("Usuario o contraseña incorrectos")
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message)
+      } else {
+        setError("Error de conexión con el servidor")
+      }
+    } finally {
+      setIsLoading(false)
     }
-
-    setIsLoading(false)
   }
 
   return (
@@ -52,15 +59,16 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="username">Usuario</Label>
+                <Label htmlFor="email">Correo electrónico</Label>
                 <Input
-                  id="username"
-                  type="text"
-                  placeholder="Ingresa tu usuario"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  id="email"
+                  type="email"
+                  placeholder="Ingresa tu correo"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                   className="bg-input border-border"
                 />
@@ -92,10 +100,12 @@ export default function LoginPage() {
 
             <div className="mt-6 text-center text-sm text-muted-foreground">
               <p>Credenciales de prueba:</p>
-              <p className="font-mono text-xs mt-1">
-                Usuario: <span className="text-primary">admin</span> | Contraseña:{" "}
-                <span className="text-primary">admin</span>
-              </p>
+              <div className="font-mono text-xs mt-2 space-y-1">
+                <p><span className="text-primary">admin@sistema.com</span> / <span className="text-primary">admin123</span> (Administrador)</p>
+                <p><span className="text-primary">maria.gonzalez@empresa.com</span> / <span className="text-primary">gerente123</span> (Gerente)</p>
+                <p><span className="text-primary">juan.perez@empresa.com</span> / <span className="text-primary">empleado123</span> (Empleado)</p>
+                <p><span className="text-primary">ana.lopez@empresa.com</span> / <span className="text-primary">cajero123</span> (Cajero)</p>
+              </div>
             </div>
           </CardContent>
         </Card>

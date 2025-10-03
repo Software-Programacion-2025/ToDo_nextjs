@@ -16,12 +16,14 @@ import { AuthGuard } from "@/components/auth-guard"
 import { Header } from "@/components/layout/header"
 import { TaskService } from "@/lib/tasks"
 import { AuthService } from "@/lib/auth"
+import { Toast, useToast } from "@/components/ui/toast-custom"
+import { UserSelector } from "@/components/ui/user-selector"
 
 interface TaskForm {
   titulo: string
   descripcion: string
   estado: "pendiente" | "en-progreso" | "completada"
-  usuariosAsignados: string[]
+  usuariosAsignados: string[] // IDs de usuarios seleccionados
 }
 
 export default function NuevaTareaPage() {
@@ -31,10 +33,10 @@ export default function NuevaTareaPage() {
     estado: "pendiente",
     usuariosAsignados: [],
   })
-  const [newUser, setNewUser] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const username = AuthService.getUsername()
+  const { toast, showToast, hideToast } = useToast()
 
   const handleInputChange = (field: keyof TaskForm, value: string) => {
     setFormData((prev) => ({
@@ -43,20 +45,10 @@ export default function NuevaTareaPage() {
     }))
   }
 
-  const handleAddUser = () => {
-    if (newUser.trim() && !formData.usuariosAsignados.includes(newUser.trim())) {
-      setFormData((prev) => ({
-        ...prev,
-        usuariosAsignados: [...prev.usuariosAsignados, newUser.trim()],
-      }))
-      setNewUser("")
-    }
-  }
-
-  const handleRemoveUser = (userToRemove: string) => {
+  const handleUsersChange = (selectedUserIds: string[]) => {
     setFormData((prev) => ({
       ...prev,
-      usuariosAsignados: prev.usuariosAsignados.filter((user) => user !== userToRemove),
+      usuariosAsignados: selectedUserIds,
     }))
   }
 
@@ -64,21 +56,44 @@ export default function NuevaTareaPage() {
     e.preventDefault()
     setIsLoading(true)
 
-    // Simulación de guardado
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    try {
+      const userId = AuthService.getUserId()
+      if (!userId) {
+        throw new Error("Usuario no autenticado")
+      }
 
-    TaskService.createTask(formData)
+      // Crear la tarea
+      const newTask = await TaskService.createTask({
+        title: formData.titulo,
+        description: formData.descripcion,
+        state: formData.estado === "pendiente" ? "pending" : 
+               formData.estado === "en-progreso" ? "in-progress" : "completed",
+        user_id: userId,
+      })
 
-    setIsLoading(false)
-    router.push("/dashboard")
-  }
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault()
-      handleAddUser()
+      // Asignar usuarios seleccionados a la tarea
+      if (formData.usuariosAsignados.length > 0) {
+        for (const assignedUserId of formData.usuariosAsignados) {
+          try {
+            await TaskService.assignUserToTask(newTask.id, assignedUserId)
+          } catch (assignError) {
+            console.warn(`Error asignando usuario ${assignedUserId}:`, assignError)
+            // Continuar con los demás usuarios aunque uno falle
+          }
+        }
+      }
+      
+      showToast("Tarea creada y usuarios asignados exitosamente", "success")
+      setTimeout(() => router.push("/dashboard"), 1500)
+    } catch (err) {
+      console.error('Error creating task:', err)
+      showToast(err instanceof Error ? err.message : "Error al crear la tarea", "error")
+    } finally {
+      setIsLoading(false)
     }
   }
+
+
 
   return (
     <AuthGuard>
@@ -137,36 +152,11 @@ export default function NuevaTareaPage() {
                 {/* Usuarios Asignados */}
                 <div className="space-y-2">
                   <Label>Usuarios Asignados</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="text"
-                      placeholder="Nombre del usuario"
-                      value={newUser}
-                      onChange={(e) => setNewUser(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                    />
-                    <Button type="button" variant="outline" onClick={handleAddUser}>
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </div>
-
-                  {/* Lista de usuarios asignados */}
-                  {formData.usuariosAsignados.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      {formData.usuariosAsignados.map((user, index) => (
-                        <Badge key={index} variant="secondary" className="flex items-center gap-1">
-                          {user}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveUser(user)}
-                            className="ml-1 hover:bg-destructive/20 rounded-full p-0.5"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
+                  <UserSelector
+                    selectedUsers={formData.usuariosAsignados}
+                    onUsersChange={handleUsersChange}
+                    placeholder="Buscar y seleccionar usuarios..."
+                  />
                 </div>
 
                 {/* Información adicional */}
@@ -192,6 +182,14 @@ export default function NuevaTareaPage() {
             </CardContent>
           </Card>
         </main>
+        
+        {toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={hideToast}
+          />
+        )}
       </div>
     </AuthGuard>
   )

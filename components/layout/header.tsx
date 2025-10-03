@@ -2,8 +2,9 @@
 
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { AuthService } from "@/lib/auth"
-import { ArrowLeft, LogOut, User } from "lucide-react"
+import { ArrowLeft, LogOut, User, Shield, Settings, LayoutDashboard } from "lucide-react"
 
 interface HeaderProps {
   title: string
@@ -14,6 +15,7 @@ interface HeaderProps {
 export function Header({ title, showBackButton = false, backUrl = "/dashboard" }: HeaderProps) {
   const router = useRouter()
   const username = AuthService.getUsername()
+  const userRoles = AuthService.getUserRoles()
 
   const handleLogout = () => {
     AuthService.logout()
@@ -44,10 +46,46 @@ export function Header({ title, showBackButton = false, backUrl = "/dashboard" }
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <User className="w-4 h-4" />
-              {username}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <User className="w-4 h-4" />
+                {username}
+              </div>
+              
+              {userRoles.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-muted-foreground" />
+                  <div className="flex gap-1">
+                    {userRoles.map((role, index) => (
+                      <Badge key={index} variant="secondary" className="text-xs">
+                        {role}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
+            
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => router.push('/dashboard')}
+            >
+              <LayoutDashboard className="w-4 h-4 mr-2" />
+              Dashboard
+            </Button>
+
+            {AuthService.hasRole('Administrador') && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => router.push('/admin')}
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Admin
+              </Button>
+            )}
+            
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               <LogOut className="w-4 h-4 mr-2" />
               Salir

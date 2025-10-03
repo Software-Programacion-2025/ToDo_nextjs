@@ -85,13 +85,28 @@ export default function EditarTareaPage() {
     e.preventDefault()
     setIsLoading(true)
 
-    // Simulación de guardado
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    TaskService.updateTask(taskId, formData)
-
+    try {
+      const token = typeof window !== "undefined" ? sessionStorage.getItem("access_token") : null
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== "undefined" ? (window as any).NEXT_PUBLIC_API_URL : "")
+      // Solo se permite marcar como completada (PUT)
+      await fetch(`${apiUrl}/tasks/${taskId}`, {
+        method: "PUT",
+        headers: {
+          "accept": "application/json",
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          state: formData.estado === "pendiente" ? "pending" : formData.estado === "en-progreso" ? "in-progress" : "completed",
+        }),
+      })
+      // Si quieres permitir asignar usuarios aquí, deberías llamar a /tasks/{task_id}/assign/{user_id} con POST
+      // for (const userId of usuariosNuevos) { ... }
+      router.push("/dashboard")
+    } catch (err) {
+      // Podrías mostrar un mensaje de error aquí
+    }
     setIsLoading(false)
-    router.push("/dashboard")
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {

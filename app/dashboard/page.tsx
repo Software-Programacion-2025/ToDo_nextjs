@@ -12,21 +12,62 @@ import { Plus, Search, MoreHorizontal, Edit, Trash2 } from "lucide-react"
 import { AuthGuard } from "@/components/auth-guard"
 import { Header } from "@/components/layout/header"
 import { TaskService, type Task } from "@/lib/tasks"
+import { AuthService } from "@/lib/auth"
+import { PermissionsGuard, usePermissions } from "@/components/permissions-guard"
 
 export default function DashboardPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const router = useRouter()
+  const permissions = usePermissions()
 
   useEffect(() => {
-    const sampleTasks = TaskService.getSampleTasks()
-    setTasks(sampleTasks)
+    const fetchTasks = async () => {
+      try {
+        const tasks = await TaskService.getAllTasks()
+        setTasks(tasks)
+      } catch (err) {
+        console.error('Error fetching tasks:', err)
+        setTasks([])
+      }
+    }
+    fetchTasks()
   }, [])
 
-  const handleDeleteTask = (taskId: string) => {
-    const success = TaskService.deleteTask(taskId)
-    if (success) {
-      setTasks(tasks.filter((task) => task.id !== taskId))
+  // Elimina la asignación del usuario actual a la tarea (softdelete)
+  const handleDeleteTask = async (taskId: number) => {
+    try {
+      const success = await TaskService.deleteTask(taskId)
+      if (success) {
+        setTasks(tasks.filter((task) => task.id !== taskId))
+      }
+    } catch (err) {
+      console.error('Error deleting task:', err)
+      // Podrías mostrar un toast o mensaje de error aquí
+    }
+  }
+
+  // Asignar usuario a tarea existente
+  const handleAssignUser = async (taskId: number, userId: string) => {
+    try {
+      await TaskService.assignUserToTask(taskId, userId)
+      // Recargar tareas para reflejar el cambio
+      const updatedTasks = await TaskService.getAllTasks()
+      setTasks(updatedTasks)
+    } catch (err) {
+      console.error('Error assigning user to task:', err)
+    }
+  }
+
+  // Marcar tarea como completada
+  const handleCompleteTask = async (taskId: number) => {
+    try {
+      await TaskService.updateTaskState(taskId, "completed")
+      // Recargar tareas para reflejar el cambio
+      const updatedTasks = await TaskService.getAllTasks()
+      setTasks(updatedTasks)
+    } catch (err) {
+      console.error('Error completing task:', err)
     }
   }
 
@@ -37,14 +78,14 @@ export default function DashboardPage() {
       completada: { label: "Completada", variant: "outline" as const },
     }
 
-    const config = statusConfig[estado]
-    return <Badge variant={config.variant}>{config.label}</Badge>
+    const config = estado ? statusConfig[estado] : statusConfig.pendiente
+    return <Badge variant={config?.variant || "secondary"}>{config?.label || "Pendiente"}</Badge>
   }
 
   const filteredTasks = tasks.filter(
     (task) =>
-      task.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      task.descripcion.toLowerCase().includes(searchTerm.toLowerCase()),
+      (task.titulo || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (task.descripcion || "").toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
   return (
@@ -90,10 +131,12 @@ export default function DashboardPage() {
                 className="pl-10"
               />
             </div>
-            <Button onClick={() => router.push("/dashboard/nueva-tarea")}>
-              <Plus className="w-4 h-4 mr-2" />
-              Nueva Tarea
-            </Button>
+            <PermissionsGuard requiredPermission="create">
+              <Button onClick={() => router.push("/dashboard/nueva-tarea")}>
+                <Plus className="w-4 h-4 mr-2" />
+                Nueva Tarea
+              </Button>
+            </PermissionsGuard>
           </div>
 
           {/* Tasks Table */}
@@ -111,19 +154,19 @@ export default function DashboardPage() {
                     <TableHead>Fecha Creación</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Usuarios Asignados</TableHead>
-                    <TableHead className="w-[100px]">Acciones</TableHead>
+                    <TableHead className="w-[180px]">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredTasks.map((task) => (
                     <TableRow key={task.id}>
-                      <TableCell className="font-medium">{task.titulo}</TableCell>
-                      <TableCell className="max-w-xs truncate">{task.descripcion}</TableCell>
-                      <TableCell>{new Date(task.fechaCreacion).toLocaleDateString()}</TableCell>
+                      <TableCell className="font-medium">{task.titulo || task.title}</TableCell>
+                      <TableCell className="max-w-xs truncate">{task.descripcion || task.description}</TableCell>
+                      <TableCell>{task.fechaCreacion ? new Date(task.fechaCreacion).toLocaleDateString() : 'N/A'}</TableCell>
                       <TableCell>{getStatusBadge(task.estado)}</TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
-                          {task.usuariosAsignados.map((usuario, index) => (
+                          {(task.usuariosAsignados || []).map((usuario, index) => (
                             <Badge key={index} variant="outline" className="text-xs">
                               {usuario}
                             </Badge>
@@ -131,23 +174,56 @@ export default function DashboardPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="w-4 h-4" />
+                        <div className="flex flex-col gap-1">
+                          <PermissionsGuard requiredPermission="assign">
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                const userId = AuthService.getUserId()
+                                if (userId) handleAssignUser(task.id, userId)
+                              }}
+                            >
+                              Asignarme
                             </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => router.push(`/dashboard/editar-tarea/${task.id}`)}>
-                              <Edit className="w-4 h-4 mr-2" />
-                              Editar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDeleteTask(task.id)} className="text-destructive">
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Eliminar
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                          </PermissionsGuard>
+                          
+                          <PermissionsGuard requiredPermission="update">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleCompleteTask(task.id)}
+                              disabled={task.estado === "completada" || task.state === "completed"}
+                            >
+                              Marcar como completada
+                            </Button>
+                          </PermissionsGuard>
+
+                          {(permissions.canUpdate() || permissions.canDelete()) && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <PermissionsGuard requiredPermission="update">
+                                  <DropdownMenuItem onClick={() => router.push(`/dashboard/editar-tarea/${task.id}`)}>
+                                    <Edit className="w-4 h-4 mr-2" />
+                                    Editar
+                                  </DropdownMenuItem>
+                                </PermissionsGuard>
+                                
+                                <PermissionsGuard requiredPermission="delete">
+                                  <DropdownMenuItem onClick={() => handleDeleteTask(task.id)} className="text-destructive">
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Eliminar
+                                  </DropdownMenuItem>
+                                </PermissionsGuard>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
